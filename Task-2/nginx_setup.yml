@@ -1,0 +1,32 @@
+---
+- name: Install and configure Nginx on AWS and Azure app servers
+  hosts: all_app_servers
+  become: yes
+  vars:
+    nginx_pkg_name: nginx
+
+  tasks:
+    - name: Update APT cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Nginx
+      ansible.builtin.apt:
+        name: "{{ nginx_pkg_name }}"
+        state: present
+
+    - name: Ensure Nginx is enabled and started
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Check Nginx default page
+      ansible.builtin.command: curl -s http://localhost
+      register: nginx_page
+      changed_when: false
+
+    - name: Show first line of Nginx page
+      ansible.builtin.debug:
+        msg: "{{ nginx_page.stdout_lines | default([]) | first | default('no output') }}"

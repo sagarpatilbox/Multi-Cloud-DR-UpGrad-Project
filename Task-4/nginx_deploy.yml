@@ -1,0 +1,47 @@
+---
+- name: Deploy custom index pages to AWS and Azure
+  hosts: all_app_servers
+  become: yes
+
+  tasks:
+    - name: Set index source based on cloud
+      ansible.builtin.set_fact:
+        custom_index_src: "index-{{ cloud }}.html"
+
+    - name: Copy custom index.html to web root
+      ansible.builtin.copy:
+        src: "{{ custom_index_src }}"
+        dest: /var/www/html/index.html
+        owner: www-data
+        group: www-data
+        mode: '0644'
+      notify: Restart nginx
+
+    - name: Ensure Nginx default site uses index.html
+      ansible.builtin.lineinfile:
+        path: /etc/nginx/sites-available/default
+        regexp: '^\s*index '
+        line: "\tindex index.html;"
+        backup: yes
+      notify: Restart nginx
+
+    - name: Check Nginx page from localhost
+      ansible.builtin.command: curl -s http://localhost
+      register: nginx_page
+      changed_when: false
+
+    - name: Assert correct welcome text
+      ansible.builtin.assert:
+        that:
+          - >
+            (cloud == 'aws' and 'Welcome to AWS' in nginx_page.stdout)
+            or
+            (cloud == 'azure' and 'Welcome to Azure' in nginx_page.stdout)
+        fail_msg: "Custom welcome text not correct on {{ inventory_hostname }}"
+        success_msg: "Custom welcome text correct on {{ inventory_hostname }}"
+
+  handlers:
+    - name: Restart nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
